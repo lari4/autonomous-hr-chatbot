@@ -471,3 +471,254 @@ Action Input: df[df['basic_pay_in_php'] > 50000]['name'].tolist()
 - Предотвращает файловые операции и системные вызовы
 
 ---
+
+## 4. Пайплайн 3: Математические Вычисления
+
+**Сценарий:** Пользователь задает вопрос, требующий математических расчетов.
+
+**Пример запроса:** *"If I take 5 vacation days, how many will I have left?"*
+
+### Схема потока данных:
+
+```
+┌──────────────────────────────────────────────────────────────────────────┐
+│ USER INPUT                                                               │
+│ "If I take 5 vacation days, how many will I have left?"                │
+└────────────────────────────┬─────────────────────────────────────────────┘
+                             │
+                             ▼
+┌──────────────────────────────────────────────────────────────────────────┐
+│ STEP 1: AGENT RECEIVES INPUT                                             │
+│                                                                          │
+│ Системный промпт + вопрос пользователя                                  │
+└────────────────────────────┬─────────────────────────────────────────────┘
+                             │
+                             ▼
+┌──────────────────────────────────────────────────────────────────────────┐
+│ STEP 2: THOUGHT #1 - Нужны данные                                       │
+│                                                                          │
+│ LLM REASONING:                                                           │
+│ "To answer this, I first need to know how many vacation days the       │
+│  user currently has."                                                    │
+│                                                                          │
+│ OUTPUT:                                                                  │
+│   Thought: "I need to check current vacation leave balance"             │
+│   Action: Employee Data                                                  │
+│   Action Input: "df[df['name'] == 'Alexander Verdad']['vacation_leave']"│
+└────────────────────────────┬─────────────────────────────────────────────┘
+                             │
+                             ▼
+┌──────────────────────────────────────────────────────────────────────────┐
+│ STEP 3: EMPLOYEE DATA TOOL EXECUTION                                     │
+│                                                                          │
+│ PythonAstREPLTool выполняет Pandas код                                  │
+│                                                                          │
+│ RESULT: "0    15                                                        │
+│         Name: vacation_leave, dtype: int64"                             │
+└────────────────────────────┬─────────────────────────────────────────────┘
+                             │
+                             ▼
+┌──────────────────────────────────────────────────────────────────────────┐
+│ STEP 4: OBSERVATION #1                                                   │
+│                                                                          │
+│ Observation: User has 15 vacation days                                  │
+│                                                                          │
+│ Agent scratchpad:                                                        │
+│   Question: If I take 5 vacation days, how many will I have left?      │
+│   Thought: I need to check current vacation leave balance               │
+│   Action: Employee Data                                                  │
+│   Action Input: df[df['name'] == 'Alexander Verdad']['vacation_leave'] │
+│   Observation: 0    15                                                  │
+│               Name: vacation_leave, dtype: int64                        │
+└────────────────────────────┬─────────────────────────────────────────────┘
+                             │
+                             ▼
+┌──────────────────────────────────────────────────────────────────────────┐
+│ STEP 5: THOUGHT #2 - Нужен расчет                                       │
+│                                                                          │
+│ LLM REASONING:                                                           │
+│ "Now I know the user has 15 vacation days. I need to calculate         │
+│  15 - 5 to find out how many will be left."                            │
+│                                                                          │
+│ OUTPUT:                                                                  │
+│   Thought: "I need to calculate 15 - 5"                                │
+│   Action: Calculator                                                     │
+│   Action Input: "15 - 5"                                                │
+└────────────────────────────┬─────────────────────────────────────────────┘
+                             │
+                             ▼
+┌──────────────────────────────────────────────────────────────────────────┐
+│ STEP 6: TOOL EXECUTION - Calculator (LLMMathChain)                      │
+│                                                                          │
+│ 6.1 LLMMATHCHAIN PROMPT CONSTRUCTION                                    │
+│     ┌────────────────────────────────────────┐                          │
+│     │ LLMMathChain Internal Prompt           │                          │
+│     │                                         │                          │
+│     │ TEMPLATE:                               │                          │
+│     │ ┌────────────────────────────────────┐ │                          │
+│     │ │ Translate a math problem into a    │ │                          │
+│     │ │ expression that can be executed    │ │                          │
+│     │ │ using Python's numexpr library.    │ │                          │
+│     │ │ Use the output of running this     │ │                          │
+│     │ │ code to answer the question.       │ │                          │
+│     │ │                                     │ │                          │
+│     │ │ Question: ${Question with          │ │                          │
+│     │ │            math problem}            │ │                          │
+│     │ │                                     │ │                          │
+│     │ │ ```text                             │ │                          │
+│     │ │ ${single line mathematical          │ │                          │
+│     │ │   expression that solves it}        │ │                          │
+│     │ │ ```                                 │ │                          │
+│     │ │ ...numexpr.evaluate(text)...       │ │                          │
+│     │ │ ```output                           │ │                          │
+│     │ │ ${Output of running the code}      │ │                          │
+│     │ │ ```                                 │ │                          │
+│     │ │ Answer: ${Answer}                  │ │                          │
+│     │ └────────────────────────────────────┘ │                          │
+│     │                                         │                          │
+│     │ ACTUAL INPUT:                           │                          │
+│     │ Question: "15 - 5"                     │                          │
+│     └──────────────┬─────────────────────────┘                          │
+│                    │                                                     │
+│                    ▼                                                     │
+│ 6.2 LLM GENERATES MATH EXPRESSION                                       │
+│     ┌────────────────────────────────────────┐                          │
+│     │ LLM (GPT-3.5-turbo) Processing         │                          │
+│     │                                         │                          │
+│     │ OUTPUT:                                 │                          │
+│     │ ┌────────────────────────────────────┐ │                          │
+│     │ │ ```text                            │ │                          │
+│     │ │ 15 - 5                             │ │                          │
+│     │ │ ```                                │ │                          │
+│     │ └────────────────────────────────────┘ │                          │
+│     └──────────────┬─────────────────────────┘                          │
+│                    │                                                     │
+│                    ▼                                                     │
+│ 6.3 NUMEXPR EVALUATION                                                  │
+│     ┌────────────────────────────────────────┐                          │
+│     │ Python numexpr.evaluate()              │                          │
+│     │                                         │                          │
+│     │ INPUT: "15 - 5"                        │                          │
+│     │                                         │                          │
+│     │ EXECUTION:                              │                          │
+│     │   numexpr.evaluate("15 - 5")           │                          │
+│     │                                         │                          │
+│     │ RESULT: 10                             │                          │
+│     └──────────────┬─────────────────────────┘                          │
+│                    │                                                     │
+│ TOOL OUTPUT: "Answer: 10"                                               │
+└────────────────────────────┬─────────────────────────────────────────────┘
+                             │
+                             ▼
+┌──────────────────────────────────────────────────────────────────────────┐
+│ STEP 7: OBSERVATION #2                                                   │
+│                                                                          │
+│ Observation: "Answer: 10"                                               │
+│                                                                          │
+│ Agent scratchpad обновляется:                                           │
+│   [Previous thoughts and actions...]                                     │
+│   Thought: I need to calculate 15 - 5                                   │
+│   Action: Calculator                                                     │
+│   Action Input: 15 - 5                                                  │
+│   Observation: Answer: 10                                               │
+└────────────────────────────┬─────────────────────────────────────────────┘
+                             │
+                             ▼
+┌──────────────────────────────────────────────────────────────────────────┐
+│ STEP 8: FINAL THOUGHT                                                    │
+│                                                                          │
+│ LLM REASONING:                                                           │
+│ "I now have all the information. The user currently has 15 vacation    │
+│  days, and if they take 5, they will have 10 left."                    │
+│                                                                          │
+│ OUTPUT:                                                                  │
+│   Thought: "I now know the final answer"                                │
+└────────────────────────────┬─────────────────────────────────────────────┘
+                             │
+                             ▼
+┌──────────────────────────────────────────────────────────────────────────┐
+│ STEP 9: FINAL ANSWER                                                     │
+│                                                                          │
+│ Final Answer: "If you take 5 vacation days, you will have 10           │
+│               vacation days left."                                       │
+└────────────────────────────┬─────────────────────────────────────────────┘
+                             │
+                             ▼
+┌──────────────────────────────────────────────────────────────────────────┐
+│ USER OUTPUT                                                              │
+│ "If you take 5 vacation days, you will have 10 vacation days left."    │
+└──────────────────────────────────────────────────────────────────────────┘
+```
+
+### Примеры математических операций:
+
+Calculator tool поддерживает различные математические выражения через numexpr:
+
+**1. Базовая арифметика:**
+```python
+Action Input: "15 - 5"        → 10
+Action Input: "50000 * 0.15"  → 7500.0 (налог 15%)
+Action Input: "(30000 / 30) * 5" → 5000.0 (5 дней зарплаты)
+```
+
+**2. Сложные выражения:**
+```python
+Action Input: "(15 + 12) * 0.5"  → 13.5
+Action Input: "365 / 12"         → 30.416666...
+```
+
+**3. Операции с процентами:**
+```python
+Action Input: "50000 + (50000 * 0.1)"  → 55000.0 (зарплата + 10% бонус)
+```
+
+### Альтернативный сценарий: Только Calculator
+
+Если вопрос чисто математический без необходимости данных:
+
+```
+USER: "What is 365 divided by 12?"
+  ↓
+THOUGHT: "This is a simple math question"
+  ↓
+ACTION: Calculator
+ACTION INPUT: "365 / 12"
+  ↓
+OBSERVATION: "Answer: 30.416666666666668"
+  ↓
+FINAL ANSWER: "365 divided by 12 equals approximately 30.42"
+```
+
+### Детали передачи данных:
+
+**Промпты и их последовательность:**
+
+1. **Системный промпт** → LLM (Thought #1)
+2. **Generated Pandas code** → Employee Data Tool
+3. **Data result** → LLM (Thought #2)
+4. **Math expression** → LLMMathChain prompt template
+5. **Math prompt** → LLM (expression generation)
+6. **Expression** → numexpr.evaluate()
+7. **Calculation result** → Agent (Observation #2)
+8. **Complete context** → LLM (Final Answer)
+
+**Вовлеченные компоненты:**
+- `ChatOpenAI` (gpt-3.5-turbo) - основной LLM (используется 4 раза)
+- `LLMMathChain` - специальный chain для математики
+- `numexpr` - библиотека для безопасного выполнения математических выражений
+- `PythonAstREPLTool` - для получения исходных данных
+- `Tool` wrapper - обертка для инструментов
+
+**Количество вызовов LLM:** 4
+1. Thought #1 + Action selection (Employee Data)
+2. Thought #2 + Action selection (Calculator)
+3. Math expression generation (внутри LLMMathChain)
+4. Final Answer generation
+
+**Особенности LLMMathChain:**
+- Использует специальный промпт для преобразования естественного языка в математические выражения
+- Поддерживает `numexpr` синтаксис (безопасная математика без exec)
+- Автоматически форматирует результат с "Answer:" префиксом
+- Verbose mode показывает промежуточные шаги
+
+---
