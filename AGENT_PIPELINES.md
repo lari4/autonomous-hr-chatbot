@@ -240,3 +240,234 @@ HR Chatbot использует архитектуру **Zero-Shot ReAct** (Reas
 3. Final Answer generation
 
 ---
+
+## 3. Пайплайн 2: Запрос к Данным Сотрудника
+
+**Сценарий:** Пользователь спрашивает о своих личных данных, балансе отпусков, зарплате, супервайзере и т.д.
+
+**Пример запроса:** *"How many sick leaves do I have left?"*
+
+### Схема потока данных:
+
+```
+┌──────────────────────────────────────────────────────────────────────────┐
+│ USER INPUT                                                               │
+│ "How many sick leaves do I have left?"                                  │
+└────────────────────────────┬─────────────────────────────────────────────┘
+                             │
+                             ▼
+┌──────────────────────────────────────────────────────────────────────────┐
+│ STEP 1: AGENT RECEIVES INPUT                                             │
+│                                                                          │
+│ Системный промпт + вопрос пользователя                                  │
+│ User context: Alexander Verdad                                          │
+└────────────────────────────┬─────────────────────────────────────────────┘
+                             │
+                             ▼
+┌──────────────────────────────────────────────────────────────────────────┐
+│ STEP 2: THOUGHT (LLM Processing)                                         │
+│                                                                          │
+│ INPUT:                                                                   │
+│   - Системный промпт                                                     │
+│   - Вопрос: "How many sick leaves do I have left?"                      │
+│   - Employee Data tool description с примером:                          │
+│     "<user>: How many Sick Leave do I have left?                        │
+│      <assistant>: df[df['name'] == 'Alexander Verdad']['sick_leave']"  │
+│   - Информация о колонках DataFrame                                      │
+│                                                                          │
+│ LLM REASONING:                                                           │
+│ "I need to check the employee data to find out how many sick leaves    │
+│  the user has left. I'll use the Employee Data tool with pandas."       │
+│                                                                          │
+│ OUTPUT:                                                                  │
+│   Thought: "I need to query the employee dataframe"                     │
+└────────────────────────────┬─────────────────────────────────────────────┘
+                             │
+                             ▼
+┌──────────────────────────────────────────────────────────────────────────┐
+│ STEP 3: ACTION SELECTION                                                 │
+│                                                                          │
+│ LLM OUTPUT:                                                              │
+│   Action: Employee Data                                                  │
+│   Action Input: "df[df['name'] == 'Alexander Verdad']['sick_leave']"   │
+└────────────────────────────┬─────────────────────────────────────────────┘
+                             │
+                             ▼
+┌──────────────────────────────────────────────────────────────────────────┐
+│ STEP 4: TOOL EXECUTION - Employee Data (PythonAstREPLTool)              │
+│                                                                          │
+│ 4.1 TOOL INITIALIZATION (уже выполнено при запуске)                     │
+│     ┌────────────────────────────────────────┐                          │
+│     │ DataFrame Loading                      │                          │
+│     │                                         │                          │
+│     │ SOURCE: employee_data.csv              │                          │
+│     │                                         │                          │
+│     │ df = pd.read_csv("employee_data.csv")  │                          │
+│     │                                         │                          │
+│     │ COLUMNS:                                │                          │
+│     │  - employee_id                         │                          │
+│     │  - name                                 │                          │
+│     │  - position                             │                          │
+│     │  - organizational_unit                  │                          │
+│     │  - rank                                 │                          │
+│     │  - hire_date                            │                          │
+│     │  - regularization_date                  │                          │
+│     │  - vacation_leave                       │                          │
+│     │  - sick_leave          ← TARGET        │                          │
+│     │  - basic_pay_in_php                    │                          │
+│     │  - employment_status                    │                          │
+│     │  - supervisor                           │                          │
+│     └────────────────────────────────────────┘                          │
+│                                                                          │
+│ 4.2 PYTHON CODE EXECUTION                                               │
+│     ┌────────────────────────────────────────┐                          │
+│     │ PythonAstREPLTool                      │                          │
+│     │ Safe Python AST Execution              │                          │
+│     │                                         │                          │
+│     │ INPUT CODE (from Action Input):        │                          │
+│     │ ┌────────────────────────────────────┐ │                          │
+│     │ │ df[df['name'] == 'Alexander        │ │                          │
+│     │ │    Verdad']['sick_leave']          │ │                          │
+│     │ └────────────────────────────────────┘ │                          │
+│     │          ↓                              │                          │
+│     │ EXECUTION STEPS:                       │                          │
+│     │                                         │                          │
+│     │ 1. Filter DataFrame:                   │                          │
+│     │    df['name'] == 'Alexander Verdad'   │                          │
+│     │    → Boolean mask                      │                          │
+│     │                                         │                          │
+│     │ 2. Apply filter:                       │                          │
+│     │    df[mask]                            │                          │
+│     │    → Filtered DataFrame (1 row)       │                          │
+│     │                                         │                          │
+│     │ 3. Select column:                      │                          │
+│     │    filtered_df['sick_leave']          │                          │
+│     │    → Pandas Series                     │                          │
+│     │                                         │                          │
+│     │ RESULT:                                 │                          │
+│     │ ┌────────────────────────────────────┐ │                          │
+│     │ │ 0    12                            │ │                          │
+│     │ │ Name: sick_leave, dtype: int64     │ │                          │
+│     │ └────────────────────────────────────┘ │                          │
+│     │          ↓                              │                          │
+│     │ TOOL OUTPUT: "0    12                  │                          │
+│     │ Name: sick_leave, dtype: int64"        │                          │
+│     └────────────────────────────────────────┘                          │
+│                                                                          │
+│ NOTE: PythonAstREPLTool использует AST (Abstract Syntax Tree)          │
+│       для безопасного выполнения кода - предотвращает выполнение       │
+│       опасных операций (exec, eval, import и т.д.)                      │
+└────────────────────────────┬─────────────────────────────────────────────┘
+                             │
+                             ▼
+┌──────────────────────────────────────────────────────────────────────────┐
+│ STEP 5: OBSERVATION                                                      │
+│                                                                          │
+│ Агент получает результат:                                               │
+│                                                                          │
+│ Observation: "0    12                                                   │
+│ Name: sick_leave, dtype: int64"                                         │
+│                                                                          │
+│ Agent scratchpad обновляется:                                           │
+│   Question: How many sick leaves do I have left?                        │
+│   Thought: I need to query employee dataframe                           │
+│   Action: Employee Data                                                  │
+│   Action Input: df[df['name'] == 'Alexander Verdad']['sick_leave']     │
+│   Observation: 0    12                                                  │
+│               Name: sick_leave, dtype: int64                            │
+└────────────────────────────┬─────────────────────────────────────────────┘
+                             │
+                             ▼
+┌──────────────────────────────────────────────────────────────────────────┐
+│ STEP 6: FINAL THOUGHT                                                    │
+│                                                                          │
+│ LLM PROCESSING:                                                          │
+│ INPUT: Весь agent_scratchpad с историей рассуждений                     │
+│                                                                          │
+│ LLM REASONING:                                                           │
+│ "Based on the observation, I can see that the sick_leave value is 12.  │
+│  I now have enough information to provide a clear answer."              │
+│                                                                          │
+│ OUTPUT:                                                                  │
+│ Thought: "I now know the final answer"                                  │
+└────────────────────────────┬─────────────────────────────────────────────┘
+                             │
+                             ▼
+┌──────────────────────────────────────────────────────────────────────────┐
+│ STEP 7: FINAL ANSWER GENERATION                                          │
+│                                                                          │
+│ LLM формирует человекочитаемый ответ из технических данных:            │
+│                                                                          │
+│ INPUT: "0    12\nName: sick_leave, dtype: int64"                        │
+│                                                                          │
+│ OUTPUT (Final Answer):                                                   │
+│ "You have 12 sick leaves left."                                         │
+└────────────────────────────┬─────────────────────────────────────────────┘
+                             │
+                             ▼
+┌──────────────────────────────────────────────────────────────────────────┐
+│ USER OUTPUT                                                              │
+│ "You have 12 sick leaves left."                                         │
+└──────────────────────────────────────────────────────────────────────────┘
+```
+
+### Альтернативные Pandas операции:
+
+Employee Data tool может выполнять различные Pandas операции:
+
+**1. Простое извлечение данных:**
+```python
+Action Input: df[df['name'] == 'Alexander Verdad']['vacation_leave']
+→ Возвращает количество дней отпуска
+```
+
+**2. Множественные колонки:**
+```python
+Action Input: df[df['name'] == 'Alexander Verdad'][['vacation_leave', 'sick_leave']]
+→ Возвращает DataFrame с несколькими колонками
+```
+
+**3. Агрегация:**
+```python
+Action Input: df.groupby('organizational_unit')['basic_pay_in_php'].mean()
+→ Средняя зарплата по отделам
+```
+
+**4. Фильтрация и подсчет:**
+```python
+Action Input: len(df[df['employment_status'] == 'Regular'])
+→ Количество постоянных сотрудников
+```
+
+**5. Сравнение:**
+```python
+Action Input: df[df['basic_pay_in_php'] > 50000]['name'].tolist()
+→ Список имен с зарплатой выше 50000
+```
+
+### Детали передачи данных:
+
+**Промпты и их последовательность:**
+
+1. **Системный промпт + Employee Data description** → LLM (Thought)
+2. **Generated Pandas code** → PythonAstREPLTool
+3. **Pandas execution result** → Agent (Observation)
+4. **Observation** → LLM (Final Answer)
+
+**Вовлеченные компоненты:**
+- `ChatOpenAI` (gpt-3.5-turbo) - основной LLM
+- `PythonAstREPLTool` - безопасный Python executor
+- `pandas.DataFrame` - данные из employee_data.csv
+- `Tool` wrapper - обертка для инструмента
+
+**Количество вызовов LLM:** 2
+1. Thought + Action selection + Code generation
+2. Final Answer generation
+
+**Безопасность:**
+- `PythonAstREPLTool` использует AST парсинг
+- Блокирует опасные операции: `exec`, `eval`, `import`, `__import__`
+- Ограничивает доступ только к предопределенным переменным (`df`)
+- Предотвращает файловые операции и системные вызовы
+
+---
