@@ -722,3 +722,248 @@ FINAL ANSWER: "365 divided by 12 equals approximately 30.42"
 - Verbose mode показывает промежуточные шаги
 
 ---
+
+## 5. Пайплайн 4: Комбинированный - Политики + Данные
+
+**Сценарий:** Пользователь спрашивает о политике И о своих персональных данных в одном вопросе.
+
+**Пример запроса:** *"How many vacation days am I entitled to per year, and how many do I currently have?"*
+
+### Схема потока данных:
+
+```
+┌──────────────────────────────────────────────────────────────────────────┐
+│ USER INPUT                                                               │
+│ "How many vacation days am I entitled to per year, and how many do      │
+│  I currently have?"                                                      │
+└────────────────────────────┬─────────────────────────────────────────────┘
+                             │
+                             ▼
+┌──────────────────────────────────────────────────────────────────────────┐
+│ STEP 1: AGENT ANALYZES QUESTION                                          │
+│                                                                          │
+│ LLM определяет, что вопрос состоит из двух частей:                      │
+│ 1. Policy question: "How many vacation days am I entitled to?"          │
+│ 2. Data question: "How many do I currently have?"                       │
+└────────────────────────────┬─────────────────────────────────────────────┘
+                             │
+                             ▼
+┌──────────────────────────────────────────────────────────────────────────┐
+│ STEP 2: THOUGHT #1 - Проверка политики                                  │
+│                                                                          │
+│ LLM REASONING:                                                           │
+│ "I need to first check the company policy on vacation leave entitlement│
+│  to answer the first part of the question."                             │
+│                                                                          │
+│ OUTPUT:                                                                  │
+│   Thought: "I need to check vacation leave policy"                      │
+│   Action: Timekeeping Policies                                          │
+│   Action Input: "Vacation Leave - Eligibility and Accrual"              │
+└────────────────────────────┬─────────────────────────────────────────────┘
+                             │
+                             ▼
+┌──────────────────────────────────────────────────────────────────────────┐
+│ STEP 3: TIMEKEEPING POLICIES TOOL EXECUTION                              │
+│                                                                          │
+│ ┌────────────────────────────────────────────────────────────────────┐  │
+│ │ 3.1 Embedding Generation (OpenAI)                                  │  │
+│ │     Input: "Vacation Leave - Eligibility and Accrual"              │  │
+│ │     Output: [0.234, -0.567, ...] (vector)                          │  │
+│ └────────────────────────────────────────────────────────────────────┘  │
+│                              ↓                                           │
+│ ┌────────────────────────────────────────────────────────────────────┐  │
+│ │ 3.2 Pinecone Vector Search                                         │  │
+│ │     Query: embedding vector                                         │  │
+│ │     Returns: Relevant chunks from hr_policy.txt                    │  │
+│ │                                                                     │  │
+│ │     Chunk 1: "A. Vacation Leave                                    │  │
+│ │               Eligibility and Accrual: All regular full-time      │  │
+│ │               employees are eligible for Vacation Leave.           │  │
+│ │               Employees will earn 1.25 days of Vacation Leave     │  │
+│ │               per month of service, accruing to 15 days per year."│  │
+│ │                                                                     │  │
+│ │     Chunk 2-4: [Additional related policy sections]                │  │
+│ └────────────────────────────────────────────────────────────────────┘  │
+│                              ↓                                           │
+│ ┌────────────────────────────────────────────────────────────────────┐  │
+│ │ 3.3 RetrievalQA Chain Processing                                   │  │
+│ │     Context: [All retrieved chunks]                                │  │
+│ │     Question: "Vacation Leave - Eligibility and Accrual"           │  │
+│ │                                                                     │  │
+│ │     LLM generates answer based on context                          │  │
+│ └────────────────────────────────────────────────────────────────────┘  │
+│                                                                          │
+│ TOOL OUTPUT:                                                             │
+│ "According to company policy, all regular full-time employees are       │
+│  entitled to 1.25 days of Vacation Leave per month, which accrues       │
+│  to 15 days per year."                                                   │
+└────────────────────────────┬─────────────────────────────────────────────┘
+                             │
+                             ▼
+┌──────────────────────────────────────────────────────────────────────────┐
+│ STEP 4: OBSERVATION #1                                                   │
+│                                                                          │
+│ Observation: "According to company policy, all regular full-time        │
+│ employees are entitled to 1.25 days of Vacation Leave per month,        │
+│ which accrues to 15 days per year."                                     │
+│                                                                          │
+│ Agent scratchpad:                                                        │
+│   Question: How many vacation days am I entitled to per year, and       │
+│             how many do I currently have?                               │
+│   Thought: I need to check vacation leave policy                        │
+│   Action: Timekeeping Policies                                          │
+│   Action Input: Vacation Leave - Eligibility and Accrual                │
+│   Observation: [Policy answer as above]                                 │
+└────────────────────────────┬─────────────────────────────────────────────┘
+                             │
+                             ▼
+┌──────────────────────────────────────────────────────────────────────────┐
+│ STEP 5: THOUGHT #2 - Проверка текущего баланса                          │
+│                                                                          │
+│ LLM REASONING:                                                           │
+│ "Now I know the entitlement is 15 days per year. I need to check       │
+│  the employee data to find out how many vacation days the user          │
+│  currently has."                                                         │
+│                                                                          │
+│ OUTPUT:                                                                  │
+│   Thought: "I need to check current vacation leave balance"             │
+│   Action: Employee Data                                                  │
+│   Action Input: "df[df['name'] == 'Alexander Verdad']['vacation_leave']"│
+└────────────────────────────┬─────────────────────────────────────────────┘
+                             │
+                             ▼
+┌──────────────────────────────────────────────────────────────────────────┐
+│ STEP 6: EMPLOYEE DATA TOOL EXECUTION                                     │
+│                                                                          │
+│ ┌────────────────────────────────────────────────────────────────────┐  │
+│ │ PythonAstREPLTool                                                  │  │
+│ │                                                                     │  │
+│ │ Code execution:                                                    │  │
+│ │   df[df['name'] == 'Alexander Verdad']['vacation_leave']          │  │
+│ │                                                                     │  │
+│ │ Result:                                                             │  │
+│ │   0    15                                                          │  │
+│ │   Name: vacation_leave, dtype: int64                               │  │
+│ └────────────────────────────────────────────────────────────────────┘  │
+│                                                                          │
+│ TOOL OUTPUT: "0    15\nName: vacation_leave, dtype: int64"              │
+└────────────────────────────┬─────────────────────────────────────────────┘
+                             │
+                             ▼
+┌──────────────────────────────────────────────────────────────────────────┐
+│ STEP 7: OBSERVATION #2                                                   │
+│                                                                          │
+│ Observation: "0    15\nName: vacation_leave, dtype: int64"              │
+│                                                                          │
+│ Agent scratchpad обновляется с новым Thought/Action/Observation          │
+└────────────────────────────┬─────────────────────────────────────────────┘
+                             │
+                             ▼
+┌──────────────────────────────────────────────────────────────────────────┐
+│ STEP 8: FINAL THOUGHT                                                    │
+│                                                                          │
+│ LLM REASONING:                                                           │
+│ "I now have complete information to answer both parts of the question: │
+│  1. Policy states 15 days per year entitlement                          │
+│  2. Current balance shows 15 days                                       │
+│  I can now provide a comprehensive answer."                             │
+│                                                                          │
+│ OUTPUT:                                                                  │
+│   Thought: "I now know the final answer"                                │
+└────────────────────────────┬─────────────────────────────────────────────┘
+                             │
+                             ▼
+┌──────────────────────────────────────────────────────────────────────────┐
+│ STEP 9: FINAL ANSWER SYNTHESIS                                           │
+│                                                                          │
+│ LLM объединяет информацию из обоих инструментов в связный ответ:       │
+│                                                                          │
+│ INPUT:                                                                   │
+│  - Policy answer: 15 days per year entitlement                          │
+│  - Current balance: 15 days                                             │
+│                                                                          │
+│ Final Answer:                                                            │
+│ "According to company policy, you are entitled to 15 vacation days     │
+│  per year (1.25 days per month). Currently, you have 15 vacation       │
+│  days available in your balance."                                       │
+└────────────────────────────┬─────────────────────────────────────────────┘
+                             │
+                             ▼
+┌──────────────────────────────────────────────────────────────────────────┐
+│ USER OUTPUT                                                              │
+│ "According to company policy, you are entitled to 15 vacation days     │
+│  per year (1.25 days per month). Currently, you have 15 vacation       │
+│  days available in your balance."                                       │
+└──────────────────────────────────────────────────────────────────────────┘
+```
+
+### Граф потока данных:
+
+```
+              USER QUESTION (двухчастный)
+                        │
+                        ▼
+           ┌────────────┴────────────┐
+           │                         │
+     Part 1: Policy            Part 2: Current Data
+           │                         │
+           ▼                         │
+  [Timekeeping Policies]            │
+  - Embedding Generation             │
+  - Vector Search                    │
+  - RetrievalQA                      │
+           │                         │
+           ▼                         │
+    Policy Answer                    │
+  "15 days per year"                 │
+           │                         │
+           └────────┬────────────────┘
+                    │
+                    ▼
+           [Employee Data]
+           - Pandas Query
+           - DataFrame Filter
+                    │
+                    ▼
+            Current Balance
+               "15 days"
+                    │
+                    ▼
+         [LLM Synthesis]
+         Combines both results
+                    │
+                    ▼
+           COMPREHENSIVE ANSWER
+```
+
+### Детали передачи данных:
+
+**Последовательность промптов:**
+
+1. **Системный промпт** → LLM (Анализ вопроса)
+2. **Thought #1** → LLM (Action selection: Timekeeping Policies)
+3. **Policy query** → Embeddings → Pinecone → RetrievalQA → LLM
+4. **Policy result** → Agent (Observation #1)
+5. **Thought #2** → LLM (Action selection: Employee Data)
+6. **Pandas code** → PythonAstREPLTool
+7. **Data result** → Agent (Observation #2)
+8. **Combined observations** → LLM (Final Answer synthesis)
+
+**Вовлеченные компоненты:**
+- `ChatOpenAI` - используется 5 раз
+- `OpenAIEmbeddings` - 1 раз
+- `Pinecone` - векторный поиск
+- `RetrievalQA` - обработка политик
+- `PythonAstREPLTool` - выполнение Pandas
+- `Tool` wrappers - обертки инструментов
+
+**Количество вызовов LLM:** 5
+1. Thought #1 + Action selection (Policies)
+2. RetrievalQA answer generation
+3. Thought #2 + Action selection (Employee Data)
+4. Final Thought
+5. Final Answer synthesis
+
+**Ключевая особенность:** Агент самостоятельно определяет необходимость использования нескольких инструментов и правильную последовательность их вызова.
+
+---
