@@ -63,3 +63,38 @@ Useful for when you need to answer questions about employee timekeeping policies
 - Используется модель эмбеддингов OpenAI `text-embedding-ada-002`
 
 ---
+
+### 2.2 Employee Data Tool
+
+**Назначение:**
+Этот промпт инструктирует AI агента использовать Python Pandas для выполнения операций с данными сотрудников, хранящимися в DataFrame 'df'. Промпт динамически включает список всех доступных колонок в DataFrame и предоставляет пример использования для извлечения персональных данных сотрудника (например, остатка больничных дней). Это критически важный инструмент для ответов на вопросы о статусе сотрудников, балансе отпусков, зарплате и других персональных данных.
+
+**Файлы:**
+- `hr_agent_backend_local.py:78-86`
+- `hr_agent_backend_azure.py:103-111`
+- `hr-agent-code-jupyter-notebook.ipynb` (Cell-1)
+
+**Промпт:**
+```python
+f"""
+Useful for when you need to answer questions about employee data stored in pandas dataframe 'df'.
+Run python pandas operations on 'df' to help you get the right answer.
+'df' has the following columns: {df_columns}
+
+<user>: How many Sick Leave do I have left?
+<assistant>: df[df['name'] == '{user}']['sick_leave']
+<assistant>: You have n sick leaves left.
+"""
+```
+
+**Параметры:**
+- `{df_columns}` - динамически подставляемый список колонок DataFrame: `['employee_id', 'name', 'position', 'organizational_unit', 'rank', 'hire_date', 'regularization_date', 'vacation_leave', 'sick_leave', 'basic_pay_in_php', 'employment_status', 'supervisor']`
+- `{user}` - имя текущего пользователя для фильтрации данных
+
+**Использование:**
+- Инструмент использует LangChain's `PythonAstREPLTool` для безопасного выполнения Python кода
+- DataFrame 'df' загружается из файла `employee_data.csv`
+- Поддерживает все операции Pandas: фильтрация, агрегация, вычисления
+- Пример запросов: остаток отпусков, информация о зарплате, данные супервайзера, статус работы
+
+---
