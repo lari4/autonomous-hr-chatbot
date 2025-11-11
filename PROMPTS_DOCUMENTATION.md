@@ -298,3 +298,194 @@ index_name = "langchain-demo"
 - Найденные фрагменты используются как контекст для ответа AI агента
 
 ---
+
+## 5. Архитектура и Поток Промптов
+
+### 5.1 Общая Архитектура Системы
+
+Приложение использует **LangChain framework** с архитектурой **Zero-Shot ReAct Agent** для создания автономного HR ассистента. Вот как промпты взаимодействуют в системе:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        ПОЛЬЗОВАТЕЛЬ                              │
+│                     "How many sick leaves                        │
+│                      do I have left?"                           │
+└──────────────────────┬──────────────────────────────────────────┘
+                       │
+                       ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    ZERO-SHOT REACT AGENT                         │
+│  ┌────────────────────────────────────────────────────────────┐ │
+│  │ Системный промпт:                                           │ │
+│  │ "You are friendly HR assistant..."                         │ │
+│  └────────────────────────────────────────────────────────────┘ │
+│  ┌────────────────────────────────────────────────────────────┐ │
+│  │ Промпты инструментов:                                       │ │
+│  │ - Timekeeping Policies                                     │ │
+│  │ - Employee Data                                            │ │
+│  │ - Calculator                                               │ │
+│  └────────────────────────────────────────────────────────────┘ │
+│  ┌────────────────────────────────────────────────────────────┐ │
+│  │ ReAct формат:                                              │ │
+│  │ Question → Thought → Action → Observation → Final Answer  │ │
+│  └────────────────────────────────────────────────────────────┘ │
+└──────────┬──────────────────┬──────────────────┬───────────────┘
+           │                  │                  │
+           ▼                  ▼                  ▼
+    ┌──────────────┐   ┌─────────────┐   ┌────────────┐
+    │ Timekeeping  │   │  Employee   │   │ Calculator │
+    │  Policies    │   │    Data     │   │            │
+    │              │   │             │   │            │
+    │ ┌──────────┐ │   │ ┌─────────┐ │   │ ┌────────┐ │
+    │ │ Pinecone │ │   │ │ Pandas  │ │   │ │LLMMath │ │
+    │ │ Vector   │ │   │ │DataFrame│ │   │ │ Chain  │ │
+    │ │   DB     │ │   │ │   'df'  │ │   │ │        │ │
+    │ └──────────┘ │   │ └─────────┘ │   │ └────────┘ │
+    │      ▲       │   │      ▲      │   │            │
+    │      │       │   │      │      │   │            │
+    │ ┌────┴─────┐ │   │ ┌────┴────┐ │   │            │
+    │ │hr_policy │ │   │ │employee │ │   │            │
+    │ │   .txt   │ │   │ │_data.csv│ │   │            │
+    │ │embeddings│ │   │ └─────────┘ │   │            │
+    │ └──────────┘ │   │             │   │            │
+    └──────────────┘   └─────────────┘   └────────────┘
+```
+
+### 5.2 Поток Выполнения Запроса
+
+**Пример: "How many sick leaves do I have left?"**
+
+1. **Инициализация:**
+   - Загружается системный промпт с именем пользователя
+   - Загружаются промпты всех 3 инструментов
+   - Создается полный шаблон ReAct агента
+
+2. **Получение запроса:**
+   - Вопрос: "How many sick leaves do I have left?"
+   - Вставляется в переменную `{input}` шаблона агента
+
+3. **Цикл ReAct:**
+
+   **Thought 1:** "I need to check the employee data to find out how many sick leaves this user has"
+
+   **Action 1:** Employee Data
+
+   **Action Input 1:** `df[df['name'] == 'Alexander Verdad']['sick_leave']`
+
+   **Observation 1:** 12
+
+   **Thought 2:** "I now know the final answer"
+
+   **Final Answer:** "You have 12 sick leaves left."
+
+4. **Возврат результата пользователю**
+
+### 5.3 Технический Стек
+
+- **LLM Model:** OpenAI GPT-3.5-turbo (локальная версия) / Azure OpenAI (Azure версия)
+- **Framework:** LangChain
+- **Agent Type:** Zero-Shot ReAct Description
+- **Tools:**
+  - `VectorDBQA` (Pinecone + OpenAI Embeddings)
+  - `PythonAstREPLTool` (Pandas операции)
+  - `LLMMathChain` (математические операции)
+- **Vector Database:** Pinecone
+- **Embedding Model:** text-embedding-ada-002 (OpenAI)
+- **Backend:** Gradio (UI), Python (логика)
+
+### 5.4 Файловая Структура Промптов
+
+```
+autonomous-hr-chatbot/
+├── hr_agent_backend_local.py          # Основной backend (локальный OpenAI)
+│   ├── Системный промпт (строка 98)
+│   ├── Timekeeping Policies промпт (строки 65-73)
+│   ├── Employee Data промпт (строки 78-86)
+│   └── Calculator промпт (строки 91-93)
+│
+├── hr_agent_backend_azure.py          # Backend для Azure OpenAI
+│   ├── Системный промпт (строка 123)
+│   ├── Timekeeping Policies промпт (строки 90-98)
+│   ├── Employee Data промпт (строки 103-111)
+│   └── Calculator промпт (строки 116-118)
+│
+├── hr_policy.txt                      # База знаний (282 строки)
+│   ├── Leave Policy (строки 1-163)
+│   └── Attendance Policy (строки 164-282)
+│
+├── employee_data.csv                  # Данные сотрудников для Pandas
+│
+├── store_embeddings_in_pinecone.ipynb # Скрипт для создания эмбеддингов
+│
+└── hr-agent-code-jupyter-notebook.ipynb # Демонстрация полного промпта
+    └── Вывод полного шаблона агента (Cell-2)
+```
+
+---
+
+## 6. Рекомендации по Улучшению Промптов
+
+### 6.1 Текущие Недостатки
+
+1. **Системный промпт слишком короткий:**
+   - Не хватает инструкций по тону общения
+   - Нет указаний по обработке конфиденциальной информации
+   - Отсутствуют правила эскалации сложных вопросов
+
+2. **Примеры в промптах инструментов:**
+   - Employee Data содержит только один пример
+   - Timekeeping Policies имеет базовый пример
+   - Calculator не имеет примеров вообще
+
+3. **Отсутствие обработки ошибок:**
+   - Нет инструкций, что делать при неполных данных
+   - Нет промптов для обработки неоднозначных запросов
+
+### 6.2 Предложения по Улучшению
+
+1. **Расширить системный промпт:**
+```python
+'You are a friendly and professional HR assistant. You are tasked to assist the current user: {user} on questions related to HR policies, leave balances, and employee information.
+
+Guidelines:
+- Always maintain confidentiality and data privacy
+- Provide accurate information based on company policies
+- If you are unsure about something, clearly state it
+- Be empathetic when dealing with sensitive topics
+- Escalate complex legal or medical questions to HR department
+- Use clear, professional language
+
+You have access to the following tools:'
+```
+
+2. **Добавить больше примеров в промпты инструментов:**
+   - Разнообразные сценарии использования
+   - Примеры edge cases
+   - Примеры комбинированного использования инструментов
+
+3. **Добавить промпт для обработки ошибок:**
+```python
+'When you encounter an error or missing data:
+1. Politely inform the user about the issue
+2. Suggest alternative approaches or workarounds
+3. Provide contact information for direct HR support if needed'
+```
+
+---
+
+## 7. Заключение
+
+Данная документация описывает все AI промпты, используемые в Autonomous HR Chatbot. Система использует модульный подход с разделением промптов на:
+
+1. **Системные промпты** - определяют роль и поведение агента
+2. **Промпты инструментов** - инструктируют использование специфических функций
+3. **Шаблон агента** - определяет формат взаимодействия (ReAct)
+4. **База знаний** - содержит контент для ответов на вопросы
+
+Такая архитектура обеспечивает гибкость, масштабируемость и легкость модификации отдельных компонентов системы без влияния на остальные части.
+
+**Версия документа:** 1.0
+**Дата создания:** 2025-11-11
+**Автор:** Claude AI Assistant
+
+---
