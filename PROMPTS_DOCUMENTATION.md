@@ -123,3 +123,62 @@ Useful when you need to do math operations or arithmetic.
 - Примеры использования: расчет процентов, вычисление разницы дат, арифметика с балансом отпусков
 
 ---
+
+## 3. Шаблон Zero-Shot React Agent
+
+### 3.1 Полный промпт агента (Generated Template)
+
+**Назначение:**
+Это полный сгенерированный LangChain промпт, который объединяет системный промпт, описания всех инструментов и инструкции по формату взаимодействия. Промпт определяет паттерн ReAct (Reasoning + Acting) для пошагового решения задач: агент думает (Thought), выбирает действие (Action), получает результат (Observation) и повторяет цикл до получения окончательного ответа (Final Answer).
+
+**Файлы:**
+- `hr-agent-code-jupyter-notebook.ipynb` (Cell-2, вывод команды `print(agent.agent.llm_chain.prompt.template)`)
+
+**Промпт:**
+```text
+You are friendly HR assistant. You are tasked to assist the current user: Alexander Verdad on questions related to HR. You have access to the following tools:
+
+Timekeeping Policies:
+        Useful for when you need to answer questions about employee timekeeping policies.
+
+Employee Data:
+        Useful for when you need to answer questions about employee data stored in pandas dataframe 'df'.
+        Run python pandas operations on 'df' to help you get the right answer.
+        'df' has the following columns: ['employee_id', 'name', 'position', 'organizational_unit', 'rank', 'hire_date', 'regularization_date', 'vacation_leave', 'sick_leave', 'basic_pay_in_php', 'employment_status', 'supervisor']
+
+        <user>: How many Sick Leave do I have left?
+        <assistant>: df[df['name'] == 'Alexander Verdad']['sick_leave']
+        <assistant>: You have n sick leaves left.
+
+Calculator:
+        Useful when you need to do math operations or arithmetic.
+
+
+Use the following format:
+
+Question: the input question you must answer
+Thought: you should always think about what to do
+Action: the action to take, should be one of [Timekeeping Policies, Employee Data, Calculator]
+Action Input: the input to the action
+Observation: the result of the action
+... (this Thought/Action/Action Input/Observation can repeat N times)
+Thought: I now know the final answer
+Final Answer: the final answer to the original input question
+
+Begin!
+
+Question: {input}
+Thought:{agent_scratchpad}
+```
+
+**Параметры:**
+- `{input}` - вопрос пользователя
+- `{agent_scratchpad}` - история рассуждений и действий агента (заполняется автоматически)
+
+**Использование:**
+- Этот промпт автоматически генерируется LangChain при создании `initialize_agent` с типом `AgentType.ZERO_SHOT_REACT_DESCRIPTION`
+- Определяет формат работы агента: циклический процесс мышления и действия
+- Агент следует этому формату для структурированного решения задач
+- Примеры действий видны в логах выполнения агента
+
+---
