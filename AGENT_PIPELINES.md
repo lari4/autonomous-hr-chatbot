@@ -967,3 +967,298 @@ FINAL ANSWER: "365 divided by 12 equals approximately 30.42"
 **Ключевая особенность:** Агент самостоятельно определяет необходимость использования нескольких инструментов и правильную последовательность их вызова.
 
 ---
+
+## 6. Пайплайн 5: Комбинированный - Данные + Калькулятор
+
+**Сценарий:** Вопрос требует получения данных и последующего математического расчета.
+
+**Пример запроса:** *"If my basic pay is increased by 10%, what will be my new salary?"*
+
+### Упрощенная схема:
+
+```
+USER QUESTION
+     │
+     ▼
+THOUGHT #1: "Need to get current salary"
+     │
+     ▼
+ACTION: Employee Data
+INPUT: df[df['name'] == 'Alexander Verdad']['basic_pay_in_php']
+     │
+     ▼
+OBSERVATION #1: Current salary = 50000
+     │
+     ▼
+THOUGHT #2: "Need to calculate 50000 + (50000 * 0.10)"
+     │
+     ▼
+ACTION: Calculator
+INPUT: "50000 + (50000 * 0.10)"
+     │
+     ▼
+OBSERVATION #2: Result = 55000.0
+     │
+     ▼
+THOUGHT #3: "I now know the final answer"
+     │
+     ▼
+FINAL ANSWER: "If your basic pay is increased by 10%, your new salary will be 55,000 PHP."
+```
+
+**Количество вызовов LLM:** 5
+1. Thought #1 + Action (Employee Data)
+2. Thought #2 + Action (Calculator)
+3. Math expression generation (LLMMathChain)
+4. Thought #3
+5. Final Answer
+
+---
+
+## 7. Пайплайн 6: Комбинированный - Все Инструменты
+
+**Сценарий:** Сложный вопрос, требующий проверки политики, получения данных и расчетов.
+
+**Пример запроса:** *"Can I encash my unused vacation leave? If yes, how much will I get?"*
+
+### Упрощенная схема:
+
+```
+USER QUESTION: "Can I encash unused vacation leave? If yes, how much?"
+     │
+     ▼
+STEP 1: Check Policy
+     ├─→ ACTION: Timekeeping Policies
+     ├─→ INPUT: "Vacation Leave Encashment Policy"
+     └─→ OBSERVATION: "Unused Vacation Leave can be encashed at year end.
+                       Formula: (basic salary / 30) × unused days"
+     │
+     ▼
+STEP 2: Get Current Balance
+     ├─→ ACTION: Employee Data
+     ├─→ INPUT: df[df['name'] == 'Alexander Verdad']['vacation_leave']
+     └─→ OBSERVATION: 15 unused days
+     │
+     ▼
+STEP 3: Get Basic Salary
+     ├─→ ACTION: Employee Data
+     ├─→ INPUT: df[df['name'] == 'Alexander Verdad']['basic_pay_in_php']
+     └─→ OBSERVATION: 50000 PHP
+     │
+     ▼
+STEP 4: Calculate Encashment
+     ├─→ ACTION: Calculator
+     ├─→ INPUT: "(50000 / 30) * 15"
+     └─→ OBSERVATION: 25000.0
+     │
+     ▼
+FINAL ANSWER:
+"Yes, you can encash your unused vacation leave. You have 15 unused vacation
+days, and based on your basic salary of 50,000 PHP, you will receive 25,000
+PHP if you encash all your unused vacation leave."
+```
+
+**Последовательность инструментов:**
+1. Timekeeping Policies (политика обналичивания)
+2. Employee Data (баланс отпуска)
+3. Employee Data (зарплата) - может быть объединено с шагом 2
+4. Calculator (расчет суммы)
+
+**Количество вызовов LLM:** 7-8
+- Multiple Thought + Action cycles
+- RetrievalQA generation
+- Math expression generation
+- Final Answer synthesis
+
+---
+
+## 8. Пайплайн 7: Прямой Ответ
+
+**Сценарий:** Вопрос общего характера, не требующий использования инструментов.
+
+**Пример запроса:** *"What does HR stand for?"*
+
+### Схема:
+
+```
+USER INPUT: "What does HR stand for?"
+     │
+     ▼
+AGENT RECEIVES INPUT
+     │
+     ▼
+THOUGHT: "This is a general knowledge question about HR terminology.
+          I don't need to use any tools to answer this."
+     │
+     ▼
+FINAL ANSWER: "HR stands for Human Resources, which refers to the
+               department in an organization that manages employee-
+               related matters such as recruitment, training, benefits,
+               and workplace policies."
+```
+
+**Особенности:**
+- Агент распознает, что вопрос не требует обращения к инструментам
+- Прямой переход от Thought к Final Answer
+- Самый быстрый пайплайн
+- Только 1 вызов LLM
+
+**Другие примеры прямых ответов:**
+- "Thank you for your help!" → "You're welcome! Feel free to ask..."
+- "How do I submit a leave request?" → "You can submit leave requests through..."
+- "Who should I contact for...?" → "For [topic], please contact..."
+
+---
+
+## 9. Сводная Таблица Пайплайнов
+
+| Пайплайн | Инструменты | LLM вызовов | Сложность | Время выполнения |
+|----------|-------------|-------------|-----------|------------------|
+| **1. Policies** | Timekeeping Policies | 3 | Средняя | 3-5 сек |
+| **2. Employee Data** | Employee Data | 2 | Низкая | 1-2 сек |
+| **3. Calculator** | Employee Data + Calculator | 4 | Средняя | 2-4 сек |
+| **4. Policies + Data** | Policies + Employee Data | 5 | Высокая | 4-7 сек |
+| **5. Data + Calculator** | Employee Data + Calculator | 5 | Средняя | 3-5 сек |
+| **6. All Tools** | All 3 tools | 7-8 | Очень высокая | 6-10 сек |
+| **7. Direct Answer** | None | 1 | Очень низкая | <1 сек |
+
+### Факторы, влияющие на время выполнения:
+
+1. **Количество вызовов LLM** - основной фактор задержки
+2. **Vector search в Pinecone** - добавляет ~500ms-1s
+3. **Embedding generation** - ~200-400ms
+4. **Pandas operations** - пренебрежимо малое время (<50ms)
+5. **Numexpr calculations** - пренебрежимо малое время (<10ms)
+
+### Распределение времени для типичного комплексного запроса:
+
+```
+Пайплайн 6 (All Tools): ~8 секунд общее время
+
+┌─────────────────────────────────────────────────────────────────┐
+│ LLM Calls (7x): ████████████████████████████ 70% (~5.6s)       │
+├─────────────────────────────────────────────────────────────────┤
+│ Embeddings: ████ 10% (~0.8s)                                    │
+├─────────────────────────────────────────────────────────────────┤
+│ Vector Search: ████ 10% (~0.8s)                                 │
+├─────────────────────────────────────────────────────────────────┤
+│ Pandas + Math: ██ 5% (~0.4s)                                    │
+├─────────────────────────────────────────────────────────────────┤
+│ Overhead: ██ 5% (~0.4s)                                         │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 10. Оптимизация и Рекомендации
+
+### Текущие ограничения:
+
+1. **Последовательное выполнение:** Агент выполняет инструменты по одному
+2. **Нет кэширования:** Повторные запросы выполняются заново
+3. **Фиксированный порядок:** Агент всегда начинает с анализа, не может пропускать шаги
+
+### Возможные оптимизации:
+
+**1. Параллельное выполнение инструментов:**
+```python
+# Текущее: последовательное
+Policy check → Data retrieval → Calculation
+
+# Оптимизированное: параллельное (где возможно)
+Policy check ──┐
+               ├─→ Combine → Calculation
+Data retrieval ┘
+```
+
+**2. Кэширование векторных поисков:**
+```python
+# Кэш для частых запросов
+"vacation leave policy" → [cached chunks]
+"sick leave policy" → [cached chunks]
+```
+
+**3. Предварительная загрузка данных:**
+```python
+# При инициализации сессии загрузить данные пользователя
+user_data = df[df['name'] == current_user].to_dict()
+# Избегает множественных Pandas запросов
+```
+
+**4. Использование более быстрой модели для простых задач:**
+```python
+# Для Thought generation: gpt-3.5-turbo
+# Для Final Answer: gpt-3.5-turbo
+# Для простых вопросов: gpt-3.5-turbo с меньшей temperature
+```
+
+**5. Streaming responses:**
+```python
+# Начать отправку ответа до завершения всех операций
+# Улучшает воспринимаемую скорость
+```
+
+---
+
+## 11. Обработка Ошибок
+
+### Типичные сценарии ошибок:
+
+**1. Инструмент возвращает ошибку:**
+```
+ACTION: Employee Data
+INPUT: df[df['name'] == 'John Doe']['vacation_leave']
+OBSERVATION: Error - Name 'John Doe' not found in dataframe
+
+AGENT RESPONSE:
+"I couldn't find an employee record for 'John Doe'. Please verify
+the name or contact HR for assistance."
+```
+
+**2. Некорректный синтаксис Pandas:**
+```
+ACTION: Employee Data
+INPUT: df['vacation_leave'  # Missing closing bracket
+OBSERVATION: SyntaxError
+
+AGENT RETRIES with corrected syntax or returns error message
+```
+
+**3. Pinecone не возвращает результаты:**
+```
+ACTION: Timekeeping Policies
+INPUT: "xyz policy"
+OBSERVATION: No relevant documents found
+
+AGENT RESPONSE:
+"I couldn't find information about 'xyz policy' in the HR policy
+documents. Please rephrase your question or contact HR directly."
+```
+
+**4. LLM не может выбрать инструмент:**
+```
+User asks very ambiguous question
+
+AGENT RESPONSE:
+"I'm not sure I understand your question correctly. Could you
+please provide more details or rephrase?"
+```
+
+---
+
+## 12. Заключение
+
+HR Agent использует гибкую архитектуру ReAct, позволяющую динамически комбинировать различные инструменты для ответа на широкий спектр вопросов:
+
+- **7+ различных пайплайнов** от простых (прямой ответ) до сложных (все инструменты)
+- **Автоматический выбор инструментов** на основе анализа вопроса
+- **Последовательная композиция** результатов от разных источников
+- **Контекстно-зависимое рассуждение** через agent_scratchpad
+
+Система демонстрирует возможности Zero-Shot Learning - агент не обучался на конкретных примерах комбинаций инструментов, но может самостоятельно выстраивать правильные цепочки вызовов.
+
+**Версия документа:** 1.0
+**Дата создания:** 2025-11-11
+**Автор:** Claude AI Assistant
+
+---
